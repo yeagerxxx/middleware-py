@@ -37,8 +37,9 @@ class TestSendText:
             )
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.send_text("5535999999999", "Olá, como posso ajudar?")
+        result = await client.send_text("5535999999999", "Olá, como posso ajudar?")
+        assert result["key"]["id"] == "msg-001"
+        assert result["status"] == "PENDING"
 
     @respx.mock
     async def test_send_text_includes_apikey_header(self, client):
@@ -47,8 +48,9 @@ class TestSendText:
             return_value=httpx.Response(200, json={"key": {"id": "msg-002"}})
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.send_text("5535999999999", "teste")
+        await client.send_text("5535999999999", "teste")
+        assert route.called
+        assert route.calls.last.request.headers["apikey"] == API_KEY
 
     @respx.mock
     async def test_send_text_correct_body(self, client):
@@ -57,8 +59,12 @@ class TestSendText:
             return_value=httpx.Response(200, json={"key": {"id": "msg-003"}})
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.send_text("5535988887777", "Sua mensagem aqui")
+        await client.send_text("5535988887777", "Sua mensagem aqui")
+        assert route.called
+        import json
+        payload = json.loads(route.calls.last.request.content)
+        assert payload["number"] == "5535988887777"
+        assert payload["text"] == "Sua mensagem aqui"
 
     @respx.mock
     async def test_send_text_server_error(self, client):
@@ -67,8 +73,9 @@ class TestSendText:
             return_value=httpx.Response(500, json={"error": "Internal Server Error"})
         )
 
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(httpx.HTTPStatusError) as exc:
             await client.send_text("5535999999999", "teste")
+        assert exc.value.response.status_code == 500
 
 
 # ── Send Buttons ─────────────────────────────────────────────────────
@@ -89,8 +96,8 @@ class TestSendButtons:
             {"buttonText": {"displayText": "Consultar chamado"}},
         ]
 
-        with pytest.raises(NotImplementedError):
-            await client.send_buttons("5535999999999", "Menu Principal", buttons)
+        result = await client.send_buttons("5535999999999", "Menu Principal", buttons)
+        assert result["key"]["id"] == "msg-btn-001"
 
     @respx.mock
     async def test_send_buttons_empty_list(self, client):
@@ -99,8 +106,8 @@ class TestSendButtons:
             return_value=httpx.Response(200, json={"key": {"id": "msg-btn-002"}})
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.send_buttons("5535999999999", "Menu", [])
+        result = await client.send_buttons("5535999999999", "Menu", [])
+        assert result["key"]["id"] == "msg-btn-002"
 
 
 # ── Send List ────────────────────────────────────────────────────────
@@ -126,13 +133,13 @@ class TestSendList:
             }
         ]
 
-        with pytest.raises(NotImplementedError):
-            await client.send_list(
-                "5535999999999",
-                "Seus Chamados",
-                "Selecione para ver detalhes",
-                sections,
-            )
+        result = await client.send_list(
+            "5535999999999",
+            "Seus Chamados",
+            "Selecione para ver detalhes",
+            sections,
+        )
+        assert result["key"]["id"] == "msg-list-001"
 
 
 # ── Headers ──────────────────────────────────────────────────────────

@@ -23,13 +23,13 @@ class TestGet:
         session_data = {"step": "MAIN_MENU", "authenticated": True, "login": "joao"}
         await fake_redis.set("session:5535999999999", json.dumps(session_data))
 
-        with pytest.raises(NotImplementedError):
-            await session_manager.get("5535999999999")
+        result = await session_manager.get("5535999999999")
+        assert result == session_data
 
     async def test_get_nonexistent_session(self, session_manager):
         """Deve retornar None quando sessão não existe."""
-        with pytest.raises(NotImplementedError):
-            await session_manager.get("5535000000000")
+        result = await session_manager.get("5535000000000")
+        assert result is None
 
     async def test_get_expired_session(self, session_manager, fake_redis):
         """Deve retornar None quando sessão expirou (TTL)."""
@@ -37,8 +37,8 @@ class TestGet:
         # Simular expiração manualmente
         await fake_redis.delete("session:5535111111111")
 
-        with pytest.raises(NotImplementedError):
-            await session_manager.get("5535111111111")
+        result = await session_manager.get("5535111111111")
+        assert result is None
 
 
 # ── Set ──────────────────────────────────────────────────────────────
@@ -51,8 +51,9 @@ class TestSet:
         """Deve salvar nova sessão no Redis."""
         session_data = {"step": "WELCOME", "authenticated": False}
 
-        with pytest.raises(NotImplementedError):
-            await session_manager.set("5535999999999", session_data)
+        await session_manager.set("5535999999999", session_data)
+        stored = await fake_redis.get("session:5535999999999")
+        assert json.loads(stored) == session_data
 
     async def test_set_overwrites_existing(self, session_manager, fake_redis):
         """Deve sobrescrever sessão existente."""
@@ -61,13 +62,16 @@ class TestSet:
             json.dumps({"step": "WELCOME"}),
         )
 
-        with pytest.raises(NotImplementedError):
-            await session_manager.set("5535999999999", {"step": "MAIN_MENU"})
+        await session_manager.set("5535999999999", {"step": "MAIN_MENU"})
+        stored = await fake_redis.get("session:5535999999999")
+        assert json.loads(stored)["step"] == "MAIN_MENU"
 
     async def test_set_applies_ttl(self, session_manager, fake_redis):
         """Deve configurar TTL na chave."""
-        with pytest.raises(NotImplementedError):
-            await session_manager.set("5535999999999", {"step": "WELCOME"})
+        await session_manager.set("5535999999999", {"step": "WELCOME"})
+        ttl = await fake_redis.ttl("session:5535999999999")
+        assert ttl > 0
+        assert ttl <= 1800  # Default TTL
 
 
 # ── Delete ───────────────────────────────────────────────────────────
@@ -80,13 +84,14 @@ class TestDelete:
         """Deve remover sessão existente."""
         await fake_redis.set("session:5535999999999", json.dumps({"step": "WELCOME"}))
 
-        with pytest.raises(NotImplementedError):
-            await session_manager.delete("5535999999999")
+        await session_manager.delete("5535999999999")
+        exists = await fake_redis.exists("session:5535999999999")
+        assert not exists
 
     async def test_delete_nonexistent_session(self, session_manager):
         """Deve ser idempotente para sessão inexistente."""
-        with pytest.raises(NotImplementedError):
-            await session_manager.delete("5535000000000")
+        await session_manager.delete("5535000000000")
+        # Sem erro
 
 
 # ── Update Step ──────────────────────────────────────────────────────
@@ -100,13 +105,16 @@ class TestUpdateStep:
         session_data = {"step": "WELCOME", "login": "joao", "authenticated": False}
         await fake_redis.set("session:5535999999999", json.dumps(session_data))
 
-        with pytest.raises(NotImplementedError):
-            await session_manager.update_step("5535999999999", "AUTH_USERNAME")
+        await session_manager.update_step("5535999999999", "AUTH_USERNAME")
+        stored = await session_manager.get("5535999999999")
+        assert stored["step"] == "AUTH_USERNAME"
+        assert stored["login"] == "joao"  # Mantém outros dados
 
     async def test_update_step_nonexistent_session(self, session_manager):
         """Deve lidar com sessão inexistente ao atualizar step."""
-        with pytest.raises(NotImplementedError):
-            await session_manager.update_step("5535000000000", "WELCOME")
+        await session_manager.update_step("5535000000000", "WELCOME")
+        stored = await session_manager.get("5535000000000")
+        assert stored["step"] == "WELCOME"
 
 
 # ── Key ──────────────────────────────────────────────────────────────

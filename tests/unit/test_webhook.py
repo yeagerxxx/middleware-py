@@ -1,20 +1,31 @@
-"""
-Testes unitários para o endpoint POST /webhook/evolution.
-
-Usa FastAPI TestClient + mocks de SessionManager, FlowEngine e EvolutionClient.
-Todos os testes esperam 500 (NotImplementedError) até a implementação real.
-"""
+from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.deps import get_evolution_client, get_flow_engine, get_session_manager
 from app.main import app
 from app.schemas.webhook import WebhookPayload
+from app.services.flow_engine import FlowResult, Step
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
+def client(mock_flow_engine, mock_session_manager, mock_evolution_client) -> TestClient:
+    """Configura TestClient com overrides de dependência."""
+    app.dependency_overrides[get_flow_engine] = lambda: mock_flow_engine
+    app.dependency_overrides[get_session_manager] = lambda: mock_session_manager
+    app.dependency_overrides[get_evolution_client] = lambda: mock_evolution_client
+    
+    # Configura retornos padrão para evitar que AsyncMock cause erros ao interpolar dicionários
+    mock_session_manager.get.return_value = {}
+    mock_flow_engine.process.return_value = FlowResult(
+        response_text="OK", next_step=Step.MAIN_MENU
+    )
+    
+    with TestClient(app) as c:
+        yield c
+    
+    app.dependency_overrides.clear()
 
 
 def _make_webhook_payload(
@@ -45,15 +56,21 @@ def _make_webhook_payload(
 class TestWebhookEndpoint:
     """Testes para POST /webhook/evolution."""
 
-    def test_webhook_receives_valid_payload(self, client):
-        """Deve aceitar payload válido (retorna 500 até implementar)."""
+    def test_webhook_receives_valid_payload(self, client, mock_flow_engine):
+        """Deve aceitar payload válido (retorna 200)."""
+        mock_flow_engine.process.return_value = FlowResult(
+            response_text="Resposta", next_step=Step.AUTH_USERNAME
+        )
         payload = _make_webhook_payload()
         response = client.post("/webhook/evolution", json=payload)
-        # Espera 500 porque o handler levanta NotImplementedError
-        assert response.status_code == 500
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
 
-    def test_webhook_receives_empty_message(self, client):
+    def test_webhook_receives_empty_message(self, client, mock_flow_engine):
         """Deve aceitar payload com mensagem None."""
+        mock_flow_engine.process.return_value = FlowResult(
+            response_text="Oi", next_step=Step.WELCOME
+        )
         payload = {
             "event": "messages.upsert",
             "instance": "test-instance",
@@ -64,7 +81,7 @@ class TestWebhookEndpoint:
             },
         }
         response = client.post("/webhook/evolution", json=payload)
-        assert response.status_code == 500
+        assert response.status_code == 200
 
     def test_webhook_invalid_json(self, client):
         """Deve retornar 422 para JSON inválido."""
@@ -82,17 +99,19 @@ class TestWebhookEndpoint:
         assert response.status_code == 422
 
     def test_webhook_from_me_message(self, client):
-        """Deve aceitar mensagem enviada pelo próprio bot (fromMe=True)."""
+        """Deve ignorar mensagem enviada pelo próprio bot (fromMe=True)."""
         payload = _make_webhook_payload()
         payload["data"]["key"]["fromMe"] = True
         response = client.post("/webhook/evolution", json=payload)
-        assert response.status_code == 500  # aceita, mas NotImplementedError
+        assert response.status_code == 200
+        assert response.json()["status"] == "ignored"
 
     def test_webhook_different_event_type(self, client):
-        """Deve aceitar eventos diferentes de messages.upsert."""
+        """Deve ignorar eventos diferentes de messages.upsert."""
         payload = _make_webhook_payload(event="connection.update")
         response = client.post("/webhook/evolution", json=payload)
-        assert response.status_code == 500
+        assert response.status_code == 200
+        assert response.json()["status"] == "ignored"
 
 
 # ── Testes de Schema ─────────────────────────────────────────────────

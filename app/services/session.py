@@ -16,19 +16,33 @@ class SessionManager:
 
     async def get(self, phone: str) -> dict | None:
         """Busca sessão pelo número de telefone. Retorna None se não existir."""
-        raise NotImplementedError
+        data = await self._redis.get(self._key(phone))
+        if not data:
+            return None
+        return json.loads(data)
 
     async def set(self, phone: str, data: dict) -> None:
         """Salva ou atualiza sessão com TTL."""
-        raise NotImplementedError
+        await self._redis.set(
+            self._key(phone),
+            json.dumps(data),
+            ex=self._ttl,
+        )
 
     async def delete(self, phone: str) -> None:
         """Remove sessão."""
-        raise NotImplementedError
+        await self._redis.delete(self._key(phone))
 
     async def update_step(self, phone: str, step: str) -> None:
         """Atualiza apenas o campo 'step' da sessão existente."""
-        raise NotImplementedError
+        data = await self.get(phone)
+        if data is None:
+            # Se não existe, cria uma nova apenas com o step
+            data = {"step": step}
+        else:
+            data["step"] = step
+
+        await self.set(phone, data)
 
     def _key(self, phone: str) -> str:
         """Gera a chave Redis para o telefone."""

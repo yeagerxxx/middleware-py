@@ -15,31 +15,57 @@ class EvolutionClient:
     async def send_text(self, number: str, text: str) -> dict:
         """
         Envia uma mensagem de texto simples.
-
-        POST /message/sendText/{instance}
-        Body: {"number": "...", "text": "..."}
         """
-        raise NotImplementedError
+        headers = self._build_headers()
+        payload = {"number": number, "text": text}
+        response = await self._client.post(
+            f"/message/sendText/{self.instance}",
+            headers=headers,
+            json=payload,
+        )
+        response.raise_for_status()
+        return response.json()
 
     async def send_buttons(
         self, number: str, title: str, buttons: list[dict]
     ) -> dict:
         """
         Envia mensagem com botões interativos.
-
-        POST /message/sendButtons/{instance}
         """
-        raise NotImplementedError
+        headers = self._build_headers()
+        payload = {
+            "number": number,
+            "title": title,
+            "buttons": buttons,
+        }
+        response = await self._client.post(
+            f"/message/sendButtons/{self.instance}",
+            headers=headers,
+            json=payload,
+        )
+        response.raise_for_status()
+        return response.json()
 
     async def send_list(
         self, number: str, title: str, description: str, sections: list[dict]
     ) -> dict:
         """
         Envia mensagem com lista de opções.
-
-        POST /message/sendList/{instance}
         """
-        raise NotImplementedError
+        headers = self._build_headers()
+        payload = {
+            "number": number,
+            "title": title,
+            "description": description,
+            "sections": sections,
+        }
+        response = await self._client.post(
+            f"/message/sendList/{self.instance}",
+            headers=headers,
+            json=payload,
+        )
+        response.raise_for_status()
+        return response.json()
 
     def _build_headers(self) -> dict[str, str]:
         """Monta headers padrão com apikey."""

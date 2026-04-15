@@ -37,8 +37,9 @@ class TestInitSession:
             )
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.init_session()
+        token = await client.init_session()
+        assert token == "abc123"
+        assert client.session_token == "abc123"
 
     @respx.mock
     async def test_init_session_invalid_credentials(self, client):
@@ -47,8 +48,9 @@ class TestInitSession:
             return_value=httpx.Response(401, json=["ERROR_GLPI_LOGIN"])
         )
 
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(httpx.HTTPStatusError) as exc:
             await client.init_session()
+        assert exc.value.response.status_code == 401
 
     @respx.mock
     async def test_init_session_stores_token(self, client):
@@ -60,8 +62,8 @@ class TestInitSession:
         # Quando implementado, o client deve armazenar o token
         assert client.session_token is None  # antes da chamada
 
-        with pytest.raises(NotImplementedError):
-            await client.init_session()
+        await client.init_session()
+        assert client.session_token == "stored-token"
 
 
 class TestInitSessionWithCredentials:
@@ -74,8 +76,9 @@ class TestInitSessionWithCredentials:
             return_value=httpx.Response(200, json={"session_token": "user-session-123"})
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.init_session_with_credentials("joao.silva", "senha123")
+        token = await client.init_session_with_credentials("joao.silva", "senha123")
+        assert token == "user-session-123"
+        assert client.session_token == "user-session-123"
 
     @respx.mock
     async def test_login_with_wrong_password(self, client):
@@ -87,8 +90,9 @@ class TestInitSessionWithCredentials:
             )
         )
 
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(httpx.HTTPStatusError) as exc:
             await client.init_session_with_credentials("joao.silva", "senha-errada")
+        assert exc.value.response.status_code == 401
 
 
 class TestKillSession:
@@ -102,8 +106,8 @@ class TestKillSession:
             return_value=httpx.Response(200)
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.kill_session()
+        await client.kill_session()
+        assert client.session_token is None
 
     @respx.mock
     async def test_kill_session_clears_token(self, client):
@@ -113,8 +117,8 @@ class TestKillSession:
             return_value=httpx.Response(200)
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.kill_session()
+        await client.kill_session()
+        assert client.session_token is None
 
 
 # ── Testes de Tickets ────────────────────────────────────────────────
@@ -141,8 +145,10 @@ class TestSearchTickets:
             )
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.search_tickets()
+        tickets = await client.search_tickets()
+        assert len(tickets) == 2
+        assert tickets[0]["1"] == 10
+        assert tickets[1]["2"] == "Chamado B"
 
     @respx.mock
     async def test_search_tickets_empty(self, client):
@@ -155,8 +161,8 @@ class TestSearchTickets:
             )
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.search_tickets()
+        tickets = await client.search_tickets()
+        assert len(tickets) == 0
 
     @respx.mock
     async def test_search_tickets_with_user_filter(self, client):
@@ -169,8 +175,9 @@ class TestSearchTickets:
             )
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.search_tickets(user_id=42)
+        tickets = await client.search_tickets(user_id=42)
+        assert len(tickets) == 1
+        assert tickets[0]["1"] == 10
 
 
 class TestGetTicket:
@@ -192,8 +199,9 @@ class TestGetTicket:
             )
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.get_ticket(10)
+        ticket = await client.get_ticket(10)
+        assert ticket["id"] == 10
+        assert ticket["name"] == "Problema com impressora"
 
     @respx.mock
     async def test_get_ticket_not_found(self, client):
@@ -206,8 +214,9 @@ class TestGetTicket:
             )
         )
 
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(httpx.HTTPStatusError) as exc:
             await client.get_ticket(999)
+        assert exc.value.response.status_code == 400
 
 
 class TestCreateTicket:
@@ -224,11 +233,11 @@ class TestCreateTicket:
             )
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.create_ticket(
-                title="Monitor não liga",
-                description="O monitor do setor financeiro não liga desde hoje cedo.",
-            )
+        result = await client.create_ticket(
+            title="Monitor não liga",
+            description="O monitor do setor financeiro não liga desde hoje cedo.",
+        )
+        assert result["id"] == 42
 
     @respx.mock
     async def test_create_ticket_sends_correct_payload(self, client):
@@ -239,11 +248,11 @@ class TestCreateTicket:
             return_value=httpx.Response(201, json={"id": 43})
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.create_ticket(
-                title="Teste",
-                description="Descrição do teste",
-            )
+        await client.create_ticket(
+            title="Teste",
+            description="Descrição do teste",
+        )
+        assert route.called
 
 
 class TestAddFollowup:
@@ -257,8 +266,8 @@ class TestAddFollowup:
             return_value=httpx.Response(201, json={"id": 100})
         )
 
-        with pytest.raises(NotImplementedError):
-            await client.add_followup(10, "Atualização: técnico a caminho.")
+        result = await client.add_followup(10, "Atualização: técnico a caminho.")
+        assert result["id"] == 100
 
 
 # ── Testes de Headers ────────────────────────────────────────────────

@@ -28,15 +28,16 @@ class TestWelcomeStep:
         """Deve enviar mensagem de boas-vindas."""
         session = {"step": Step.WELCOME}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("oi", session)
+        result = await flow_engine.process("oi", session)
+        assert "Bem-vindo" in result.response_text
+        assert result.next_step == Step.AUTH_USERNAME
 
     async def test_welcome_transitions_to_auth_username(self, flow_engine):
         """Deve transicionar para AUTH_USERNAME."""
         session = {"step": Step.WELCOME}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("qualquer coisa", session)
+        result = await flow_engine.process("qualquer coisa", session)
+        assert result.next_step == Step.AUTH_USERNAME
 
 
 # ── Estado AUTH_USERNAME ─────────────────────────────────────────────
@@ -49,22 +50,22 @@ class TestAuthUsernameStep:
         """Deve salvar o login informado na sessão."""
         session = {"step": Step.AUTH_USERNAME}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("joao.silva", session)
+        result = await flow_engine.process("joao.silva", session)
+        assert result.session_updates["login"] == "joao.silva"
 
     async def test_transitions_to_auth_password(self, flow_engine):
         """Deve transicionar para AUTH_PASSWORD."""
         session = {"step": Step.AUTH_USERNAME}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("joao.silva", session)
+        result = await flow_engine.process("joao.silva", session)
+        assert result.next_step == Step.AUTH_PASSWORD
 
     async def test_asks_for_password(self, flow_engine):
         """Deve pedir a senha ao usuário."""
         session = {"step": Step.AUTH_USERNAME}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("joao.silva", session)
+        result = await flow_engine.process("joao.silva", session)
+        assert "senha" in result.response_text.lower()
 
 
 # ── Estado AUTH_PASSWORD ─────────────────────────────────────────────
@@ -78,24 +79,28 @@ class TestAuthPasswordStep:
         mock_glpi_client.init_session_with_credentials.return_value = "session-token-123"
         session = {"step": Step.AUTH_PASSWORD, "login": "joao.silva"}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("senha123", session)
+        result = await flow_engine.process("senha123", session)
+        assert result.next_step == Step.MAIN_MENU
+        assert result.session_updates["authenticated"] is True
+        assert result.session_updates["glpi_session_token"] == "session-token-123"
 
     async def test_failed_login(self, flow_engine, mock_glpi_client):
         """Deve voltar para AUTH_USERNAME quando login falha."""
         mock_glpi_client.init_session_with_credentials.side_effect = Exception("Login failed")
         session = {"step": Step.AUTH_PASSWORD, "login": "joao.silva"}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("senha-errada", session)
+        result = await flow_engine.process("senha-errada", session)
+        assert result.next_step == Step.AUTH_USERNAME
+        assert result.session_updates["authenticated"] is False
 
     async def test_failed_login_sends_error_message(self, flow_engine, mock_glpi_client):
         """Deve informar o usuário sobre falha no login."""
         mock_glpi_client.init_session_with_credentials.side_effect = Exception("Login failed")
         session = {"step": Step.AUTH_PASSWORD, "login": "joao.silva"}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("senha-errada", session)
+        result = await flow_engine.process("senha-errada", session)
+        assert "Falha" in result.response_text
+        assert "login" in result.response_text.lower()
 
 
 # ── Estado MAIN_MENU ─────────────────────────────────────────────────
@@ -108,8 +113,9 @@ class TestMainMenuStep:
         """Opção 1 deve transicionar para CREATE_TICKET_TITLE."""
         session = {"step": Step.MAIN_MENU, "authenticated": True}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("1", session)
+        result = await flow_engine.process("1", session)
+        assert result.next_step == Step.CREATE_TICKET_TITLE
+        assert "título" in result.response_text.lower()
 
     async def test_option_2_lists_tickets(self, flow_engine, mock_glpi_client):
         """Opção 2 deve buscar e listar chamados."""
@@ -119,37 +125,42 @@ class TestMainMenuStep:
         ]
         session = {"step": Step.MAIN_MENU, "authenticated": True, "glpi_session_token": "tok"}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("2", session)
+        result = await flow_engine.process("2", session)
+        assert "Chamado A" in result.response_text
+        assert "Chamado B" in result.response_text
+        assert result.next_step == Step.MAIN_MENU
 
     async def test_option_2_empty_list(self, flow_engine, mock_glpi_client):
         """Opção 2 sem chamados deve informar que não há chamados."""
         mock_glpi_client.search_tickets.return_value = []
         session = {"step": Step.MAIN_MENU, "authenticated": True, "glpi_session_token": "tok"}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("2", session)
+        result = await flow_engine.process("2", session)
+        assert "não possui" in result.response_text.lower()
+        assert result.next_step == Step.MAIN_MENU
 
     async def test_option_3_goes_to_ticket_status(self, flow_engine):
         """Opção 3 deve transicionar para TICKET_STATUS."""
         session = {"step": Step.MAIN_MENU, "authenticated": True}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("3", session)
+        result = await flow_engine.process("3", session)
+        assert result.next_step == Step.TICKET_STATUS
+        assert "número" in result.response_text.lower()
 
     async def test_invalid_option(self, flow_engine):
         """Opção inválida deve pedir para escolher novamente."""
         session = {"step": Step.MAIN_MENU, "authenticated": True}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("99", session)
+        result = await flow_engine.process("99", session)
+        assert "inválida" in result.response_text.lower()
+        assert result.next_step == Step.MAIN_MENU
 
     async def test_text_option(self, flow_engine):
         """Texto livre deve ser tratado como opção inválida."""
         session = {"step": Step.MAIN_MENU, "authenticated": True}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("quero abrir um chamado", session)
+        result = await flow_engine.process("quero abrir um chamado", session)
+        assert result.next_step == Step.MAIN_MENU
 
 
 # ── Estado CREATE_TICKET_TITLE ───────────────────────────────────────
@@ -162,15 +173,16 @@ class TestCreateTicketTitleStep:
         """Deve salvar o título e transicionar para CREATE_TICKET_DESC."""
         session = {"step": Step.CREATE_TICKET_TITLE}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("Impressora não funciona", session)
+        result = await flow_engine.process("Impressora não funciona", session)
+        assert result.session_updates["ticket_title"] == "Impressora não funciona"
+        assert result.next_step == Step.CREATE_TICKET_DESC
 
     async def test_asks_for_description(self, flow_engine):
         """Deve pedir a descrição do chamado."""
         session = {"step": Step.CREATE_TICKET_TITLE}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("Monitor apagado", session)
+        result = await flow_engine.process("Monitor apagado", session)
+        assert "descrição" in result.response_text.lower()
 
 
 # ── Estado CREATE_TICKET_DESC ────────────────────────────────────────
@@ -188,10 +200,11 @@ class TestCreateTicketDescStep:
             "glpi_session_token": "tok",
         }
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process(
-                "A impressora do 2o andar parou de imprimir desde ontem.", session
-            )
+        result = await flow_engine.process(
+            "A impressora do 2o andar parou de imprimir desde ontem.", session
+        )
+        assert "criado com sucesso" in result.response_text.lower()
+        assert result.next_step == Step.MAIN_MENU
 
     async def test_ticket_creation_failure(self, flow_engine, mock_glpi_client):
         """Deve informar erro quando criação de chamado falha."""
@@ -202,8 +215,9 @@ class TestCreateTicketDescStep:
             "glpi_session_token": "tok",
         }
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("Descrição", session)
+        result = await flow_engine.process("Descrição", session)
+        assert "Erro" in result.response_text
+        assert result.next_step == Step.MAIN_MENU
 
     async def test_response_includes_ticket_id(self, flow_engine, mock_glpi_client):
         """Resposta deve incluir o número do chamado criado."""
@@ -214,8 +228,9 @@ class TestCreateTicketDescStep:
             "glpi_session_token": "tok",
         }
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("Descrição do problema", session)
+        result = await flow_engine.process("Descrição do problema", session)
+        assert "#99" in result.response_text
+        assert result.next_step == Step.MAIN_MENU
 
 
 # ── Estado TICKET_STATUS ─────────────────────────────────────────────
@@ -234,23 +249,27 @@ class TestTicketStatusStep:
         }
         session = {"step": Step.TICKET_STATUS, "glpi_session_token": "tok"}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("10", session)
+        result = await flow_engine.process("10", session)
+        assert "#10" in result.response_text
+        assert "Impressora quebrada" in result.response_text
+        assert result.next_step == Step.MAIN_MENU
 
     async def test_ticket_not_found(self, flow_engine, mock_glpi_client):
         """Deve informar quando chamado não existe."""
         mock_glpi_client.get_ticket.side_effect = Exception("Not found")
         session = {"step": Step.TICKET_STATUS, "glpi_session_token": "tok"}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("999", session)
+        result = await flow_engine.process("999", session)
+        assert "não encontrado" in result.response_text.lower()
+        assert result.next_step == Step.MAIN_MENU
 
     async def test_invalid_ticket_number(self, flow_engine):
         """Deve lidar com entrada que não é número."""
         session = {"step": Step.TICKET_STATUS}
 
-        with pytest.raises(NotImplementedError):
-            result = await flow_engine.process("abc", session)
+        result = await flow_engine.process("abc", session)
+        assert "apenas números" in result.response_text.lower()
+        assert result.next_step == Step.TICKET_STATUS
 
 
 # ── Step Enum ────────────────────────────────────────────────────────

@@ -20,6 +20,7 @@ from app.clients.evolution import EvolutionClient
 from app.clients.glpi import GLPIClient
 from app.core.config import Settings
 from app.main import app
+from app.services.flow_engine import FlowEngine, Step
 from app.services.session import SessionManager
 
 
@@ -112,6 +113,12 @@ def mock_session_manager():
     """Mock completo do SessionManager para testes do webhook."""
     mock = AsyncMock(spec=SessionManager)
     return mock
+
+
+@pytest.fixture
+def mock_flow_engine():
+    """Mock completo do FlowEngine para testes do webhook."""
+    return AsyncMock(spec=FlowEngine)
 
 
 # ── FastAPI Test Client ──────────────────────────────────────────────
